@@ -33,12 +33,13 @@ def main(x_0,K):#np.arange(0.4,3.8,0.2):
     file_name = 'logistic_prob_sim_x_0_'+str(x_0)+'_K_'+str(K)
     output_file = file_name+'.pkl'
 
+
     dt = 0.25
     frame_rate = 20
     times_real_time = 20 # seconds of simulation / sec in video
     capture_interval = int(scipy.ceil(times_real_time*(1./frame_rate)/dt))
 
-    simulation_time = 50.*60. #seconds
+    simulation_time =2.*60. #seconds
     release_delay = 0.*60#/(wind_mag)
 
     t_start = 0.0
@@ -48,13 +49,9 @@ def main(x_0,K):#np.arange(0.4,3.8,0.2):
     fig = plt.figure(figsize=(11, 11))
     ax = fig.add_subplot(111)
 
-    # Video
-    FFMpegWriter = animate.writers['ffmpeg']
-    metadata = {'title':file_name,}
-    writer = FFMpegWriter(fps=frame_rate, metadata=metadata)
-    writer.setup(fig, file_name+'.mp4', 500)
 
-    wind_angle = 7*scipy.pi/8.
+
+    wind_angle = 3*scipy.pi/2
     wind_mag = 1.6
     # wind_angle = 7*scipy.pi/4.
     wind_param = {
@@ -67,11 +64,14 @@ def main(x_0,K):#np.arange(0.4,3.8,0.2):
     wind_field = wind_models.WindField(param=wind_param)
 
     #traps
-    number_sources = 8
+    number_sources = 1
     radius_sources = 1000.0
     trap_radius = 0.5
-    location_list, strength_list = utility.create_circle_of_sources(number_sources,
-                    radius_sources,None)
+
+    location_list = [(0,0)]
+    strength_list = [1]
+
+
     trap_param = {
             'source_locations' : location_list,
             'source_strengths' : strength_list,
@@ -85,8 +85,8 @@ def main(x_0,K):#np.arange(0.4,3.8,0.2):
     #Wind and plume objects
 
     #Odor arena
-    xlim = (-1500., 1500.)
-    ylim = (-1500., 1500.)
+    xlim = (-500., 500.)
+    ylim = (-1500., 0.)
     im_extents = xlim[0], xlim[1], ylim[0], ylim[1]
 
     source_pos = scipy.array([scipy.array(tup) for tup in traps.param['source_locations']])
@@ -94,11 +94,12 @@ def main(x_0,K):#np.arange(0.4,3.8,0.2):
     # Set up logistic prob plume object
 
     logisticPlumes = models.LogisticProbPlume(K,x_0,source_pos,wind_angle)
+    #To document the plume parameters, save a reference plot of the plume probability curve
 
     #Setup fly swarm
-    wind_slippage = (0.,1.)
-    # wind_slippage = (0.,0.)
-    swarm_size=2000
+    wind_slippage = (0.,0.)
+    # swarm_size=2000
+    swarm_size=20000
     use_empirical_release_data = False
 
     #Grab wind info to determine heading mean
@@ -117,15 +118,9 @@ def main(x_0,K):#np.arange(0.4,3.8,0.2):
     swarm_param = {
             'swarm_size'          : swarm_size,
             'heading_data'        : heading_data,
-            'initial_heading'     : scipy.radians(scipy.random.uniform(0.0,360.0,(swarm_size,))),
-            'x_start_position'    : scipy.zeros(swarm_size),
-            'y_start_position'    : scipy.zeros(swarm_size),
-
-            # For testing the 'inside band masks'
-            # 'initial_heading'     : (11./8)*scipy.pi*np.ones((swarm_size,)),
-            # 'x_start_position'    : scipy.linspace(0,800,swarm_size),
-            # 'y_start_position'    : scipy.zeros(swarm_size),
-
+            'initial_heading'     : np.pi*np.ones(swarm_size),
+            'x_start_position'    : 100*scipy.ones(swarm_size),
+            'y_start_position'    : np.linspace(0,-1000,swarm_size),
             'flight_speed'        : scipy.full((swarm_size,), 1.5),
             'release_time'        : release_times,
             'release_delay'       : release_delay,
@@ -141,15 +136,11 @@ def main(x_0,K):#np.arange(0.4,3.8,0.2):
             't_stop':3000.,
             'cast_timeout':20,
             'airspeed_saturation':True
-            # 'airspeed_saturation':False
             }
 
 
     swarm = swarm_models.ReducedSwarmOfFlies(wind_field,traps,param=swarm_param,
         start_type='fh')
-
-    # xmin,xmax,ymin,ymax = -1000,1000,-1000,1000
-
 
     #Concentration plotting
     conc_d = logisticPlumes.conc_im(im_extents)
@@ -163,7 +154,7 @@ def main(x_0,K):#np.arange(0.4,3.8,0.2):
     plt.colorbar()
 
 
-    xmin,xmax,ymin,ymax = -1000,1000,-1000,1000
+    xmin,xmax,ymin,ymax = (-500., 500.,-1500., 0.)
 
     buffr = 100
     ax.set_xlim((xmin-buffr,xmax+buffr))
@@ -231,6 +222,8 @@ def main(x_0,K):#np.arange(0.4,3.8,0.2):
 
 
     plt.ion()
+
+
     # plt.show()
     # raw_input()
     while t<simulation_time:
@@ -239,7 +232,8 @@ def main(x_0,K):#np.arange(0.4,3.8,0.2):
             print('t: {0:1.2f}'.format(t))
             swarm.update(t,dt,wind_field,logisticPlumes,traps)
             t+= dt
-        # Update time display
+            plt.pause(0.001)
+            # time.sleep(0.001)
         release_delay = release_delay/60.
         text ='{0} min {1} sec'.format(
             int(scipy.floor(abs(t/60.))),int(scipy.floor(abs(t)%60.)))
@@ -253,26 +247,42 @@ def main(x_0,K):#np.arange(0.4,3.8,0.2):
         #
         fly_dots.set_edgecolor(fly_edgecolors)
         fly_dots.set_facecolor(fly_facecolors)
-        # plt.pause(0.0001)
-        writer.grab_frame()
-
-        trap_list = []
-        for trap_num, trap_loc in enumerate(traps.param['source_locations']):
-            mask_trap = swarm.trap_num == trap_num
-            trap_cnt = mask_trap.sum()
-            trap_list.append(trap_cnt)
-        total_cnt = sum(trap_list)
 
 
-    writer.finish()
 
-# main(700,-0.2)
+    #the expected curve
+    plt.figure(2)
+    inputs = np.linspace(0,1000,1000)
+    outputs = logisticPlumes.logistic_1d(inputs)
+    plt.plot(inputs,outputs,'r')
+    plt.title('Logistic Curve with K: '+str(K)+', x_0: '+str(x_0),color='purple')
+    plt.xlim(0,1000.)
+    plt.ylim(-0.02,1.)
+    plt.xlabel('Distance from Trap (m)')
+    plt.ylabel('Trap Arrival Probability')
+
+    #Examine the empirical success rate by distance
+    passed_thru_mask = (swarm.mode == Mode_StartMode)
+    num_bins = 100;max_trap_distance = 1000
+    bin_width = max_trap_distance/num_bins
+    fly_release_density = swarm_size/max_trap_distance
+    fly_release_density_per_bin = fly_release_density*bin_width
+
+    bins=np.linspace(0,max_trap_distance,num_bins)
+    n_successes,_ = np.histogram(-1.*swarm.y_position[passed_thru_mask],bins)
+    n_successes = n_successes.astype(float)
+    # print(n_successes)
+    # print(fly_release_density_per_bin)
+    plt.plot(bins[:-1],1.-(n_successes/(fly_release_density_per_bin)),'o  ')
+    plt.show()
+    raw_input()
+
+
+    with open(output_file, 'w') as f:
+        pickle.dump((wind_field,swarm),f)
+
 main(300,-0.4)
 
-# from multiprocessing import Pool
-# pool = Pool(processes=6)
-# Ks = -1*np.array([0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0])
-# x_0s = np.linspace(0.1,1.0,10)
 
 
 # pool.map(main,mags)
